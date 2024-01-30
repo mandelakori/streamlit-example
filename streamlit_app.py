@@ -1,40 +1,52 @@
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import torch
+from transformers import pipeline, set_seed
 
-"""
-# Welcome to Streamlit!
+# Set up the text generation pipeline
+pipe = pipeline(
+    "text-generation",
+    model="HuggingFaceH4/zephyr-7b-alpha",
+    torch_dtype=torch.bfloat16,
+    device_map="auto",
+)
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+# Function to generate AI response
+def generate_response(user_input):
+    instruction = (
+        "Your name is AISAK, which stands for 'Artificially Intelligent Swiss Army Knife'. "
+        "You are built by Mandela Logan. You are Mandela Logan's first implementation of a multi-purpose AI clerk. "
+        "You are an assistant, and your task is to assist the user in every query."
+    )
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+    messages = [
+        {"role": "system", "content": instruction},
+        {"role": "user", "content": user_input},
+    ]
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
+    # Exclude the system instruction from the output
+    prompt = pipe.tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )[1:]
+    outputs = pipe(
+        prompt,
+        max_new_tokens=256,
+        do_sample=True,
+        temperature=0.7,
+        top_k=50,
+        top_p=0.95,
+        pad_token_id=pipe.tokenizer.eos_token_id,
+    )
 
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
+    # Extract and return the generated text
+    return outputs[0]["generated_text"]
 
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
+# Streamlit UI
+st.title("AISAK - AI Chatbot")
 
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
-
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+user_input = st.text_input("You:")
+if st.button("Send"):
+    if user_input.lower() in ["exit", "quit", "bye"]:
+        st.write("AISAK: Goodbye!")
+    else:
+        response = generate_response(user_input)
+        st.write(f"AISAK: {response}")
